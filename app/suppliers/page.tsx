@@ -1,18 +1,17 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { MainNav } from "@/components/main-nav"
-import { Search } from "@/components/search"
-import { UserNav } from "@/components/user-nav"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useRouter } from "next/navigation"
-import { Plus, Eye, Edit, Trash } from "lucide-react"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { MainNav } from "@/components/main-nav";
+import { Search } from "@/components/search";
+import { UserNav } from "@/components/user-nav";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useRouter } from "next/navigation";
+import { Plus, Eye, Edit, Trash } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,93 +20,164 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { toast } from "@/hooks/use-toast"
+} from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 
-export default function SuppliersPage() {
-  const router = useRouter()
-  const [suppliers, setSuppliers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [open, setOpen] = useState(false)
+// Backenddan kelgan ma'lumotlarga mos interfeys
+interface Supplier {
+  id: number;
+  company_name: string;
+  contact_person_name: string;
+  phone_number: string;
+  email: string;
+  address: string;
+  description: string;
+  balance: string; // Backendda "0.00" kabi string sifatida kelmoqda
+}
+
+const SuppliersPage = () => {
+  const router = useRouter();
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
-    name: "",
-    contactPerson: "",
-    phone: "",
+    company_name: "",
+    contact_person_name: "",
+    phone_number: "",
     email: "",
     address: "",
     description: "",
-  })
+  });
 
+  const API_URL = "http://api.ahlan.uz/suppliers/";
+
+  // Ma'lumotlarni API dan olish (GET)
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      // Generate mock suppliers data
-      const mockSuppliers = Array.from({ length: 10 }, (_, i) => {
-        return {
-          id: i + 1,
-          name: `Yetkazib beruvchi ${i + 1}`,
-          contactPerson: `Aloqa shaxsi ${i + 1}`,
-          phone: `+998 9${i % 10} ${100 + i} ${10 + i} ${20 + i}`,
-          email: `supplier${i + 1}@example.com`,
-          address: "Toshkent sh., Chilonzor tumani",
-          description: "Qurilish materiallari yetkazib beruvchi",
-          totalPurchases: Math.floor(Math.random() * 50000) + 10000,
-          balance: Math.floor(Math.random() * 10000) - 5000,
+    const fetchSuppliers = async () => {
+      try {
+        const response = await fetch(API_URL, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            // Agar API token talab qilsa: "Authorization": "Bearer YOUR_API_TOKEN",
+          },
+        });
+        if (!response.ok) throw new Error("Ma'lumotlarni olishda xatolik");
+        const data = await response.json();
+
+        // API javobidan "results" massivini olish
+        if (data && Array.isArray(data.results)) {
+          setSuppliers(data.results);
+        } else {
+          console.error("API dan kutilmagan formatdagi ma'lumot keldi:", data);
+          setSuppliers([]);
+          toast({ title: "Xatolik", description: "API ma'lumotlari noto'g'ri formatda" });
         }
-      })
-
-      setSuppliers(mockSuppliers)
-      setLoading(false)
-    }, 1000)
-  }, [])
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Simulate API call
-    setTimeout(() => {
-      const newSupplier = {
-        id: suppliers.length + 1,
-        ...formData,
-        totalPurchases: 0,
-        balance: 0,
+      } catch (error) {
+        console.error("Xatolik:", error);
+        setSuppliers([]);
+        toast({ title: "Xatolik", description: "Ma'lumotlarni yuklashda muammo yuz berdi" });
+      } finally {
+        setLoading(false);
       }
+    };
+    fetchSuppliers();
+  }, []);
 
-      setSuppliers([newSupplier, ...suppliers])
-      setFormData({
-        name: "",
-        contactPerson: "",
-        phone: "",
-        email: "",
-        address: "",
-        description: "",
-      })
-      setOpen(false)
+  // Formadagi o'zgarishlarni boshqarish
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-      toast({
-        title: "Yetkazib beruvchi qo'shildi",
-        description: "Yangi yetkazib beruvchi muvaffaqiyatli qo'shildi",
-      })
-    }, 500)
-  }
+  // Yangi yetkazib beruvchi qo'shish yoki tahrirlash (POST yoki PUT)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = editId ? `${API_URL}${editId}/` : API_URL;
+      const method = editId ? "PUT" : "POST";
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          // "Authorization": "Bearer YOUR_API_TOKEN",
+        },
+        body: JSON.stringify({ ...formData, balance: "0.00" }), // Backendga moslashtirildi
+      });
+      if (!response.ok) throw new Error("Saqlashda xatolik");
+      const updatedSupplier = await response.json();
 
-  const filteredSuppliers = suppliers.filter((supplier) => {
-    if (
-      searchTerm &&
-      !supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      !supplier.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      !supplier.phone.includes(searchTerm)
-    ) {
-      return false
+      if (editId) {
+        setSuppliers((prev) =>
+          prev.map((supplier) => (supplier.id === editId ? updatedSupplier : supplier))
+        );
+        toast({ title: "Yangilandi", description: "Yetkazib beruvchi muvaffaqiyatli yangilandi" });
+      } else {
+        setSuppliers((prev) => [updatedSupplier, ...prev]);
+        toast({ title: "Qo'shildi", description: "Yangi yetkazib beruvchi qo'shildi" });
+      }
+      resetForm();
+    } catch (error) {
+      console.error("Xatolik:", error);
+      toast({ title: "Xatolik", description: "Ma'lumotlarni saqlashda muammo yuz berdi" });
     }
-    return true
-  })
+  };
+
+  // Yetkazib beruvchini o'chirish (DELETE)
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await fetch(`${API_URL}${id}/`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          // "Authorization": "Bearer YOUR_API_TOKEN",
+        },
+      });
+      if (!response.ok) throw new Error("O'chirishda xatolik");
+      setSuppliers((prev) => prev.filter((supplier) => supplier.id !== id));
+      toast({ title: "O'chirildi", description: "Yetkazib beruvchi muvaffaqiyatli o'chirildi" });
+    } catch (error) {
+      console.error("Xatolik:", error);
+      toast({ title: "Xatolik", description: "O'chirishda muammo yuz berdi" });
+    }
+  };
+
+  // Tahrirlash uchun formani to'ldirish
+  const handleEdit = (supplier: Supplier) => {
+    setEditId(supplier.id);
+    setFormData({
+      company_name: supplier.company_name,
+      contact_person_name: supplier.contact_person_name,
+      phone_number: supplier.phone_number,
+      email: supplier.email,
+      address: supplier.address,
+      description: supplier.description,
+    });
+    setOpen(true);
+  };
+
+  // Formani tozalash
+  const resetForm = () => {
+    setFormData({
+      company_name: "",
+      contact_person_name: "",
+      phone_number: "",
+      email: "",
+      address: "",
+      description: "",
+    });
+    setEditId(null);
+    setOpen(false);
+  };
+
+  // Qidiruv bo'yicha filtrlangan yetkazib beruvchilar
+  const filteredSuppliers = suppliers.filter((supplier) =>
+    [supplier.company_name, supplier.contact_person_name, supplier.phone_number].some((field) =>
+      field.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -123,50 +193,82 @@ export default function SuppliersPage() {
       <div className="flex-1 space-y-4 p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Yetkazib beruvchilar</h2>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(isOpen) => !isOpen && resetForm()}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => setOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Yangi yetkazib beruvchi qo'shish
+                Yangi yetkazib beruvchi qo‘shish
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px]">
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
-                  <DialogTitle>Yangi yetkazib beruvchi qo'shish</DialogTitle>
-                  <DialogDescription>Yangi yetkazib beruvchi ma'lumotlarini kiriting</DialogDescription>
+                  <DialogTitle>
+                    {editId ? "Yetkazib beruvchini tahrirlash" : "Yangi yetkazib beruvchi qo‘shish"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Yetkazib beruvchi ma'lumotlarini kiriting yoki yangilang
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Kompaniya nomi</Label>
-                      <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="contactPerson">Aloqa shaxsi</Label>
+                      <Label htmlFor="company_name">Kompaniya nomi</Label>
                       <Input
-                        id="contactPerson"
-                        name="contactPerson"
-                        value={formData.contactPerson}
+                        id="company_name"
+                        name="company_name"
+                        value={formData.company_name}
                         onChange={handleChange}
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Telefon</Label>
-                      <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} required />
+                      <Label htmlFor="contact_person_name">Aloqa shaxsi</Label>
+                      <Input
+                        id="contact_person_name"
+                        name="contact_person_name"
+                        value={formData.contact_person_name}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone_number">Telefon</Label>
+                      <Input
+                        id="phone_number"
+                        name="phone_number"
+                        value={formData.phone_number}
+                        onChange={handleChange}
+                        required
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} />
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                      />
                     </div>
                     <div className="space-y-2 col-span-2">
                       <Label htmlFor="address">Manzil</Label>
-                      <Input id="address" name="address" value={formData.address} onChange={handleChange} />
+                      <Input
+                        id="address"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                      />
                     </div>
                     <div className="space-y-2 col-span-2">
                       <Label htmlFor="description">Tavsif</Label>
-                      <Input id="description" name="description" value={formData.description} onChange={handleChange} />
+                      <Input
+                        id="description"
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                      />
                     </div>
                   </div>
                 </div>
@@ -207,44 +309,54 @@ export default function SuppliersPage() {
                         <TableHead>Telefon</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Balans</TableHead>
-                        <TableHead>Jami xaridlar</TableHead>
                         <TableHead className="text-right">Amallar</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredSuppliers.map((supplier) => (
-                        <TableRow key={supplier.id}>
-                          <TableCell className="font-medium">{supplier.name}</TableCell>
-                          <TableCell>{supplier.contactPerson}</TableCell>
-                          <TableCell>{supplier.phone}</TableCell>
-                          <TableCell>{supplier.email}</TableCell>
-                          <TableCell>
-                            {supplier.balance >= 0 ? (
-                              <span className="text-green-600">${supplier.balance.toLocaleString()}</span>
-                            ) : (
-                              <span className="text-red-600">-${Math.abs(supplier.balance).toLocaleString()}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>${supplier.totalPurchases.toLocaleString()}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => router.push(`/suppliers/${supplier.id}`)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon">
-                                <Trash className="h-4 w-4" />
-                              </Button>
-                            </div>
+                      {filteredSuppliers.length > 0 ? (
+                        filteredSuppliers.map((supplier) => (
+                          <TableRow key={supplier.id}>
+                            <TableCell className="font-medium">{supplier.company_name}</TableCell>
+                            <TableCell>{supplier.contact_person_name}</TableCell>
+                            <TableCell>{supplier.phone_number}</TableCell>
+                            <TableCell>{supplier.email}</TableCell>
+                            <TableCell>
+                              {parseFloat(supplier.balance) >= 0 ? (
+                                <span className="text-green-600">
+                                  ${parseFloat(supplier.balance).toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-red-600">
+                                  -${Math.abs(parseFloat(supplier.balance)).toLocaleString()}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => router.push(`/suppliers/${supplier.id}`)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(supplier)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(supplier.id)}>
+                                  <Trash className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center">
+                            Yetkazib beruvchilar topilmadi
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -254,6 +366,7 @@ export default function SuppliersPage() {
         </Card>
       </div>
     </div>
-  )
-}
+  );
+};
 
+export default SuppliersPage;

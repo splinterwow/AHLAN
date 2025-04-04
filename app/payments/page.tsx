@@ -807,8 +807,8 @@ export default function PaymentsPage() {
               <p className="text-xs text-muted-foreground">
                 {totalAmount !== "0"
                   ? Math.round(
-                    (getTotalAmount("paid") / getTotalAmount()) * 100
-                  )
+                      (getTotalAmount("paid") / getTotalAmount()) * 100
+                    )
                   : 0}
                 % to‘langan
               </p>
@@ -828,8 +828,8 @@ export default function PaymentsPage() {
               <p className="text-xs text-muted-foreground">
                 {totalAmount !== "0"
                   ? Math.round(
-                    (getTotalAmount("overdue") / getTotalAmount()) * 100
-                  )
+                      (getTotalAmount("overdue") / getTotalAmount()) * 100
+                    )
                   : 0}
                 % muddati o‘tgan
               </p>

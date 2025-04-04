@@ -131,14 +131,14 @@ export function AppSidebar({ ...props }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
 
-                  <SidebarMenuItem>
+                  {/* <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={isActive("/invoices")} tooltip="Hisob-fakturalar">
                       <Link to="/invoices">
                         <FileSpreadsheet className="mr-2" />
                         <span>Hisob-fakturalar</span>
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  </SidebarMenuItem> */}
 
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Hisobotlar">

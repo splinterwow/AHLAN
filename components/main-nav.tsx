@@ -61,12 +61,12 @@ export function MainNav({ className, ...props }: MainNavProps) {
       icon: DollarSign,
       active: pathname === "/expenses" || pathname.startsWith("/expenses/"),
     },
-    {
-      href: "/invoices",
-      label: "Hisob-fakturalar",
-      icon: FileText,
-      active: pathname === "/invoices" || pathname.startsWith("/invoices/"),
-    },
+    // {
+    //   href: "/invoices",
+    //   label: "Hisob-fakturalar",
+    //   icon: FileText,
+    //   active: pathname === "/invoices" || pathname.startsWith("/invoices/"),
+    // },
     {
       href: "/reports",
       label: "Hisobotlar",
