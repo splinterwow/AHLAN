@@ -1,26 +1,26 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { MainNav } from "@/components/main-nav"
-import { Search } from "@/components/search"
-import { UserNav } from "@/components/user-nav"
-import { Textarea } from "@/components/ui/textarea"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { toast } from "@/hooks/use-toast"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MainNav } from "@/components/main-nav";
+import { Search } from "@/components/search";
+import { UserNav } from "@/components/user-nav";
+import { Textarea } from "@/components/ui/textarea";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
 
 export default function AddApartmentPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const propertyIdParam = searchParams.get("propertyId")
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const propertyIdParam = searchParams.get("propertyId");
 
-  const [loading, setLoading] = useState(false)
-  const [properties, setProperties] = useState<any[]>([])
+  const [loading, setLoading] = useState(false);
+  const [properties, setProperties] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     object: propertyIdParam || "",
     room_number: "",
@@ -30,104 +30,116 @@ export default function AddApartmentPage() {
     price: "",
     description: "",
     status: "bosh", // Default status
-  })
+  });
 
-  // Tokenni localStorage yoki boshqa joydan olish (masalan, login sahifasidan saqlangan deb faraz qilamiz)
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
-  // Obyektlar ro‘yxatini API’dan olish
+  // Obyektlar ro‘yxatini API’dan barcha sahifalar bilan olish
   useEffect(() => {
-    const fetchProperties = async () => {
+    const fetchAllProperties = async () => {
+      if (!token) {
+        toast({
+          title: "Xatolik",
+          description: "Foydalanuvchi autentifikatsiyadan o‘tmagan",
+          variant: "destructive",
+        });
+        router.push("/login");
+        return;
+      }
+
       try {
-        const response = await fetch("http://api.ahlan.uz/objects/", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        })
-        if (!response.ok) {
-          throw new Error("Obyektlarni yuklashda xatolik yuz berdi")
+        let allProperties: any[] = [];
+        let nextUrl: string | null = "http://api.ahlan.uz/objects/?page_size=2"; // page_size=2 deb faraz qilamiz
+
+        // Har bir sahifani ketma-ket so'rab, barcha obyektlarni yig'ish
+        while (nextUrl) {
+          const response = await fetch(nextUrl, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error("Obyektlarni yuklashda xatolik yuz berdi");
+          }
+
+          const data = await response.json();
+          allProperties = [...allProperties, ...(data.results || data)]; // Har bir sahifadagi natijalarni qo'shish
+          nextUrl = data.next; // Keyingi sahifa URL'ini olish (agar mavjud bo'lsa)
         }
-        const data = await response.json()
-        setProperties(data.results || data) // Pagination ishlatilgan bo‘lsa 'results' ishlatiladi
+
+        setProperties(allProperties); // Barcha obyektlarni saqlash
       } catch (error) {
         toast({
           title: "Xatolik",
-          description: error.message || "Obyektlarni yuklashda xatolik",
+          description: (error as Error).message || "Obyektlarni yuklashda xatolik",
           variant: "destructive",
-        })
+        });
       }
-    }
+    };
 
     if (token) {
-      fetchProperties()
-    } else {
-      toast({
-        title: "Xatolik",
-        description: "Foydalanuvchi autentifikatsiyadan o‘tmagan",
-        variant: "destructive",
-      })
-      router.push("/login") // Login sahifasiga yo‘naltirish
+      fetchAllProperties();
     }
-  }, [token, router])
+  }, [token, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
-    // API’ga yuborish uchun ma'lumotlarni tayyorlash
     const payload = {
-      object: Number(formData.object), // ForeignKey sifatida raqam
-      room_number: Number(formData.room_number), // PositiveIntegerField
-      rooms: Number(formData.rooms), // PositiveIntegerField
-      area: Number(formData.area), // FloatField
-      floor: Number(formData.floor), // PositiveIntegerField
-      price: Number(formData.price), // DecimalField, raqam sifatida yuboriladi
-      status: formData.status, // Choices bilan cheklangan
-      description: formData.description || "", // TextField, bo‘sh bo‘lishi mumkin
-    }
+      object: Number(formData.object),
+      room_number: Number(formData.room_number),
+      rooms: Number(formData.rooms),
+      area: Number(formData.area),
+      floor: Number(formData.floor),
+      price: Number(formData.price),
+      status: formData.status,
+      description: formData.description || "",
+    };
 
     try {
       const response = await fetch("http://api.ahlan.uz/apartments/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // JWT token qo‘shildi
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Xonadon qo'shishda xatolik yuz berdi")
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Xonadon qo'shishda xatolik yuz berdi");
       }
 
-      const data = await response.json()
-      setLoading(false)
+      const data = await response.json();
+      setLoading(false);
       toast({
         title: "Xonadon qo'shildi",
         description: "Yangi xonadon muvaffaqiyatli qo'shildi",
-      })
-      router.push("/apartments")
+      });
+      router.push("/apartments");
     } catch (error) {
-      setLoading(false)
+      setLoading(false);
       toast({
         title: "Xatolik",
-        description: error.message || "Xonadon qo'shishda xatolik yuz berdi",
+        description: (error as Error).message || "Xonadon qo'shishda xatolik yuz berdi",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -258,5 +270,5 @@ export default function AddApartmentPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }
