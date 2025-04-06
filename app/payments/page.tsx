@@ -64,13 +64,14 @@ export default function PaymentsPage() {
   const [filters, setFilters] = useState({
     status: "",
     payment_type: "all",
+    pageSize: "100", // Yangi qo‘shilgan pageSize maydoni
   });
   const [totalAmount, setTotalAmount] = useState("0");
   const [totalPaid, setTotalPaid] = useState("0");
   const [totalOverdue, setTotalOverdue] = useState("0");
   const [formattedPayments, setFormattedPayments] = useState<any[]>([]);
 
-  const API_BASE_URL = "http://api.ahlan.uz"; // API bazaviy URL (prefiksiz)
+  const API_BASE_URL = "http://api.ahlan.uz";
 
   const getAuthHeaders = () => ({
     Accept: "application/json",
@@ -87,31 +88,42 @@ export default function PaymentsPage() {
 
   const fetchPayments = async () => {
     setLoading(true);
+    let allPayments: any[] = [];
+    let nextUrl = `${API_BASE_URL}/payments/`;
+
     try {
-      let url = `${API_BASE_URL}/payments/`;
       const queryParams = new URLSearchParams();
       if (filters.status) queryParams.append("status", filters.status);
       if (filters.payment_type && filters.payment_type !== "all")
         queryParams.append("payment_type", filters.payment_type);
-      if (queryParams.toString()) url += `?${queryParams.toString()}`;
+      queryParams.append("page_size", filters.pageSize); // pageSize qo‘shildi
 
-      const response = await fetch(url, {
-        method: "GET",
-        headers: getAuthHeaders(),
-      });
-      if (!response.ok) {
-        throw new Error(
-          `To‘lovlarni yuklashda xatolik: ${response.status} - ${response.statusText}`
-        );
+      if (queryParams.toString()) nextUrl += `?${queryParams.toString()}`;
+
+      while (nextUrl) {
+        const response = await fetch(nextUrl, {
+          method: "GET",
+          headers: getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `To‘lovlarni yuklashda xatolik: ${response.status} - ${response.statusText}`
+          );
+        }
+
+        const data = await response.json();
+        const paymentsList = data.results || data;
+        allPayments = [...allPayments, ...paymentsList];
+        nextUrl = data.next;
       }
-      const data = await response.json();
-      setPayments(data.results || data);
+
+      setPayments(allPayments);
     } catch (error) {
       toast({
         title: "Xatolik",
         description:
-          (error as Error).message ||
-          "API bilan bog‘lanishda xatolik yuz berdi",
+          (error as Error).message || "API bilan bog‘lanishda xatolik yuz berdi",
         variant: "destructive",
       });
     } finally {
@@ -126,21 +138,21 @@ export default function PaymentsPage() {
       const overdue = getTotalAmount("overdue");
 
       setTotalAmount(
-        total.toLocaleString("uz-UZ", {
+        total.toLocaleString("us-US", {
           style: "currency",
-          currency: "UZS",
+          currency: "USD",
         })
       );
       setTotalPaid(
-        paid.toLocaleString("uz-UZ", {
+        paid.toLocaleString("us-US", {
           style: "currency",
-          currency: "UZS",
+          currency: "USD",
         })
       );
       setTotalOverdue(
-        overdue.toLocaleString("uz-UZ", {
+        overdue.toLocaleString("us-US", {
           style: "currency",
-          currency: "UZS",
+          currency: "USD",
         })
       );
     }
@@ -151,10 +163,10 @@ export default function PaymentsPage() {
       const formatted = payments.map((payment: any) => ({
         ...payment,
         formattedAmount: Number(payment.total_amount || 0).toLocaleString(
-          "uz-UZ",
+          "us-US",
           {
             style: "currency",
-            currency: "UZS",
+            currency: "USD",
           }
         ),
         formattedDate: payment.created_at
@@ -470,12 +482,11 @@ export default function PaymentsPage() {
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">To‘lovlar</h2>
           <Dialog open={open} onOpenChange={setOpen}>
-            {/* <DialogTrigger asChild>
+            <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-2 h-4 w-4" />
                 Yangi to‘lov qo‘shish
               </Button>
-            </DialogTrigger> */}
+            </DialogTrigger>
             <DialogContent className="sm:max-w-[600px]">
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
@@ -873,12 +884,30 @@ export default function PaymentsPage() {
                         <SelectItem value="ipoteka">Ipoteka</SelectItem>
                       </SelectContent>
                     </Select>
+                    <Select
+                      value={filters.pageSize}
+                      onValueChange={(value) =>
+                        handleFilterChange("pageSize", value)
+                      }
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Sahifadagi yozuvlar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="200">200</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="outline"
                       onClick={() => {
                         setFilters({
                           status: "",
                           payment_type: "all",
+                          pageSize: "100",
                         });
                         setSearchTerm("");
                       }}

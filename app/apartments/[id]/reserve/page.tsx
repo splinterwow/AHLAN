@@ -39,7 +39,6 @@ export default function ReserveApartmentPage() {
     clientId: "",
     initialPayment: "",
     totalMonths: "12",
-    interestRate: "0",
     comments: "",
     name: "",
     phone: "",
@@ -47,10 +46,11 @@ export default function ReserveApartmentPage() {
     kafilFio: "",
     kafilPhone: "",
     kafilAddress: "",
-    due_date: 15
+    due_date: 15,
   });
 
   const API_BASE_URL = "http://api.ahlan.uz";
+  const PAGE_SIZE = 100; // Mijozlar ro'yxati uchun page size
 
   const getAuthHeaders = () => ({
     Accept: "application/json",
@@ -65,9 +65,14 @@ export default function ReserveApartmentPage() {
     }
   }, []);
 
+  const validatePhoneNumber = (phone: string) => {
+    const phoneRegex = /^\+998\d{9}$/;
+    return phoneRegex.test(phone);
+  };
+
   const fetchAllClients = async () => {
     let allClients: any[] = [];
-    let nextUrl: string | null = `${API_BASE_URL}/users/?user_type=mijoz`;
+    let nextUrl: string | null = `${API_BASE_URL}/users/?user_type=mijoz&page_size=${PAGE_SIZE}`;
 
     try {
       while (nextUrl) {
@@ -82,7 +87,7 @@ export default function ReserveApartmentPage() {
 
         const data = await response.json();
         allClients = [...allClients, ...(data.results || [])];
-        nextUrl = data.next; // Keyingi sahifa URL
+        nextUrl = data.next;
       }
       return allClients;
     } catch (error) {
@@ -102,9 +107,9 @@ export default function ReserveApartmentPage() {
       const apartmentId = params.id;
       if (!apartmentId) throw new Error("Xonadon ID topilmadi.");
 
-      const apartmentResponse = await fetch(`${API_BASE_URL}/apartments/${apartmentId}/`, { 
-        method: "GET", 
-        headers: getAuthHeaders() 
+      const apartmentResponse = await fetch(`${API_BASE_URL}/apartments/${apartmentId}/`, {
+        method: "GET",
+        headers: getAuthHeaders(),
       });
       if (!apartmentResponse.ok) {
         if (apartmentResponse.status === 404) throw new Error("Xonadon topilmadi.");
@@ -113,19 +118,16 @@ export default function ReserveApartmentPage() {
       const apartmentData = await apartmentResponse.json();
       setApartment(apartmentData);
 
-      // Barcha mijozlarni paginatsiya orqali olish
       const allClients = await fetchAllClients();
       setClients(allClients);
 
       setFormData((prev) => ({
         ...prev,
-        initialPayment: apartmentData?.price && paymentType !== 'naqd' 
-          ? Math.round(apartmentData.price * 0.3).toString() 
+        initialPayment: apartmentData?.price && paymentType !== "naqd"
+          ? Math.round(apartmentData.price * 0.3).toString()
           : apartmentData?.price.toString(),
-        interestRate: paymentType === "ipoteka" ? "10" : "0",
-        totalMonths: paymentType === 'naqd' ? '0' : (prev.totalMonths === '0' ? '12' : prev.totalMonths),
+        totalMonths: paymentType === "naqd" ? "0" : (prev.totalMonths === "0" ? "12" : prev.totalMonths),
       }));
-
     } catch (error) {
       console.error("Fetch data error:", error);
       toast({ title: "Xatolik", description: (error as Error).message, variant: "destructive" });
@@ -153,6 +155,13 @@ export default function ReserveApartmentPage() {
   const createClient = async (): Promise<any> => {
     if (!accessToken) throw new Error("Avtorizatsiya qilinmagan.");
 
+    if (!validatePhoneNumber(formData.phone)) {
+      throw new Error("Telefon raqami noto'g'ri formatda. To'g'ri format: +998901234567");
+    }
+    if (formData.kafilPhone && !validatePhoneNumber(formData.kafilPhone)) {
+      throw new Error("Kafil telefon raqami noto'g'ri formatda. To'g'ri format: +998901234567");
+    }
+
     const clientData = {
       fio: formData.name,
       phone_number: formData.phone,
@@ -178,7 +187,9 @@ export default function ReserveApartmentPage() {
         const errorData = await response.json().catch(() => ({}));
         console.error("Create client error data:", errorData);
         let errorMessage = `Mijoz qo'shishda xatolik (${response.status})`;
-        if (errorData && typeof errorData === 'object') {
+        if (errorData.phone_number && errorData.phone_number.includes("already exists")) {
+          errorMessage = "Bu telefon raqami allaqachon ro'yxatdan o'tgan.";
+        } else if (errorData && typeof errorData === "object") {
           const firstErrorKey = Object.keys(errorData)[0];
           if (firstErrorKey && Array.isArray(errorData[firstErrorKey])) {
             errorMessage = `${firstErrorKey}: ${errorData[firstErrorKey][0]}`;
@@ -211,17 +222,17 @@ export default function ReserveApartmentPage() {
         title: "Muvaffaqiyat!",
         description: `${newClient.fio} mijozlar ro'yxatiga qo'shildi.`,
       });
-      setClients(prev => [...prev, newClient]);
+      setClients((prev) => [...prev, newClient]);
       handleSelectChange("clientId", newClient.id.toString());
       setActiveTab("existing");
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         name: "",
         phone: "",
         address: "",
         kafilFio: "",
         kafilPhone: "",
-        kafilAddress: ""
+        kafilAddress: "",
       }));
       setShowKafil(false);
     } catch (error) {
@@ -237,13 +248,11 @@ export default function ReserveApartmentPage() {
   };
 
   const calculateMonthlyPayment = () => {
-    if (!apartment || paymentType === 'naqd') return 0;
+    if (!apartment || paymentType === "naqd") return 0;
     if (!formData.initialPayment || !formData.totalMonths || Number(formData.totalMonths) <= 0) return 0;
     const principal = Math.max(0, apartment.price - Number.parseInt(formData.initialPayment));
-    const interestRateDecimal = Number(formData.interestRate) / 100;
     const months = Number(formData.totalMonths);
-    const totalWithInterest = principal * (1 + interestRateDecimal);
-    const monthlyPayment = totalWithInterest / months;
+    const monthlyPayment = principal / months;
     if (monthlyPayment > Number.MAX_SAFE_INTEGER) {
       throw new Error("Hisoblangan oylik to'lov juda katta.");
     }
@@ -251,26 +260,27 @@ export default function ReserveApartmentPage() {
   };
 
   const generateContractText = (paymentId: number, client: any) => {
-    const currentDate = new Date().toLocaleDateString("uz-UZ", { day: "2-digit", month: "long", year: "numeric" });
-    const priceInWords = (price: number): string => Number(price || 0).toLocaleString("uz-UZ");
+    const currentDate = new Date().toLocaleDateString("us-US", { day: "2-digit", month: "long", year: "numeric" });
+    const priceInWords = (price: number): string => Number(price || 0).toLocaleString("us-US");
     if (!apartment) return "Xonadon ma'lumotlari topilmadi.";
-    
-    const finalPrice = paymentType === 'naqd' ? apartment.price * 1.1 : apartment.price;
-    const formattedPrice = Number(finalPrice).toLocaleString("uz-UZ");
+
+    const finalPrice = paymentType === "naqd" ? apartment.price : apartment.price;
+    const formattedPrice = Number(finalPrice).toLocaleString("us-US");
     const priceWords = priceInWords(finalPrice);
-    const initialPaymentFormatted = Number(formData.initialPayment || 0).toLocaleString('uz-UZ');
+    const initialPaymentFormatted = Number(formData.initialPayment || 0).toLocaleString("us-US");
     let monthlyPaymentFormatted = "0";
     try {
-      monthlyPaymentFormatted = calculateMonthlyPayment().toLocaleString('uz-UZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      monthlyPaymentFormatted = calculateMonthlyPayment().toLocaleString("us-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     } catch (e) {
       monthlyPaymentFormatted = "Hisoblashda xato";
     }
     const endDate = new Date();
-    if (paymentType !== 'naqd' && formData.totalMonths && Number(formData.totalMonths) > 0) {
+    if (paymentType !== "naqd" && formData.totalMonths && Number(formData.totalMonths) > 0) {
       endDate.setMonth(endDate.getMonth() + Number(formData.totalMonths));
     }
-    const endDateString = endDate.toLocaleDateString('uz-UZ');
+    const endDateString = endDate.toLocaleDateString("us-US");
 
+    // TODO: "AXLAN HOUSE" MCHJ ma'lumotlarini backenddan olish mumkin
     return `
                 ДАСТЛАБКИ ШАРТНОМА № ${paymentId}
     Куп хонадонли турар-жой биноси қуриш ва сотиш тўғрисида
@@ -290,9 +300,9 @@ export default function ReserveApartmentPage() {
 1. Томонлар «Буюртмачи» хонадон сотиб олишга розилиги тўғрисида
    «Бажарувчи»га ариза орқали мурожаат этгандан сўнг, Ўзбекистон
    Республикаси, Фарғона вилояти, Қўқон шаҳар,
-   ${apartment.object_name || 'Номаълум Обиект'} да жойлашган
-   ${apartment.floor || 'N/A'}-қаватли ${apartment.room_number || 'N/A'}-хонадонли (${apartment.rooms || '?'} хонали,
-   умумий майдони ${apartment.area || '?'} кв.м) турар-жой биносини қуришга, буюртмачи
+   ${apartment.object_name || "Номаълум Обиект"} да жойлашган
+   ${apartment.floor || "N/A"}-қаватли ${apartment.room_number || "N/A"}-хонадонли (${apartment.rooms || "?"} хонали,
+   умумий майдони ${apartment.area || "?"} кв.м) турар-жой биносини қуришга, буюртмачи
    вазифасини бажариш тўғрисида шартномани (кейинги ўринларда - асосий
    шартнома) тузиш мажбуриятини ўз зиммаларига оладилар.
 
@@ -300,10 +310,10 @@ export default function ReserveApartmentPage() {
 
 1. Томонлар қуйидагиларни асосий шартноманинг муҳим шартлари деб
    ҳисоблашга келишиб оладилар:
-   а) «Буюртмачи»га топшириладиган ${apartment.room_number || 'N/A'}-хонадоннинг умумий
+   а) «Буюртмачи»га топшириладиган ${apartment.room_number || "N/A"}-хонадоннинг умумий
       қийматининг бошланғич нархи ${formattedPrice} (${priceWords}) сўмни
       ташкил этади ва ушбу нарх томонлар томонидан келишилган ҳолда
-      ${paymentType === 'naqd' ? 'ўзгармайди' : 'ўзгариши мумкин'};
+      ${paymentType === "naqd" ? "ўзгармайди" : "ўзгариши мумкин"};
    б) Бажарувчи «тайёр ҳолда топшириш» шартларида турар-жой биносини
       қуришга бажарувчи вазифасини бажариш мажбуриятини ўз зиммасига
       олади ва лойиҳага мувофиқ қуриш бўйича барча ишларни пудратчиларни
@@ -319,17 +329,17 @@ export default function ReserveApartmentPage() {
                        III. ҲИСОБ-КИТОБ ТАРТИБИ
 
 1) «Буюртмачи» томонидан мазкур шартнома имзолангач,
-   ${paymentType === 'naqd'
+   ${paymentType === "naqd"
      ? `тўлиқ тўловни (${initialPaymentFormatted} сўм) дарҳол`
      : `${formData.totalMonths} ой давомида (${endDateString} гача)`
    }
    банкдаги ҳисоб-варағига хонадон умумий қийматини, яъни
    ${formattedPrice} (${priceWords}) сўм миқдорида пул маблағини
    ўтказади.
-${paymentType !== 'naqd'
+${paymentType !== "naqd"
   ? `   - Бошланғич тўлов: ${initialPaymentFormatted} so'm (${currentDate}).
    - Ойлик тўлов: ${monthlyPaymentFormatted} so'm (har oyning ${formData.due_date || 15}-sanasigacha).`
-  : ''
+  : ""
 }
 
                     IV. ШАРТНОМАНИНГ АМАЛ ҚИЛИШИ
@@ -339,8 +349,8 @@ ${paymentType !== 'naqd'
 4.2. Бажарувчининг ташаббуси билан мазкур шартнома қуйидаги холларда
      бекор қилиниши мумкин:
      - «Буюртмачи» томонидан мазкур шартнома тузилгандан кейин
-       ${paymentType === 'naqd'
-         ? 'тўлиқ тўловни'
+       ${paymentType === "naqd"
+         ? "тўлиқ тўловни"
          : `${endDateString} гача бўлган муддатда белгиланган тўловларни`}
        амалга оширмаса;
 
@@ -364,8 +374,8 @@ ${paymentType !== 'naqd'
 СТИР: 306997685
 ХХТУТ: 61110
 Х/р: 20208000205158478001
-МФО: 01076 Ипотека банк                    ${client.kafil_fio ? `\nКафил: ${client.kafil_fio}` : ''}
-       Қўқон филиали                       ${client.kafil_phone_number ? `Кафил тел: ${client.kafil_phone_number}` : ''}
+МФО: 01076 Ипотека банк                    ${client.kafil_fio ? `\nКафил: ${client.kafil_fio}` : ""}
+       Қўқон филиали                       ${client.kafil_phone_number ? `Кафил тел: ${client.kafil_phone_number}` : ""}
 Тел № (+99833) 701-75 75
 
 _________________________                   _________________________
@@ -382,19 +392,19 @@ _________________________                   _________________________
         return new Paragraph({
           children: [new TextRun({ text: line, bold: true, size: 28, font: commonProps.font })],
           alignment: AlignmentType.CENTER,
-          spacing: { after: 200 }
+          spacing: { after: 200 },
         });
       } else if (line.match(/^(I|II|III|IV|V|VI)\./)) {
         return new Paragraph({
           children: [new TextRun({ text: line, bold: true, ...commonProps })],
           heading: HeadingLevel.HEADING_1,
-          spacing: { before: 300, after: 150 }
+          spacing: { before: 300, after: 150 },
         });
-      } else if (line.match(/^\d+\)/) || line.match(/^[а-я]\)/) || line.trim().startsWith('-')) {
+      } else if (line.match(/^\d+\)/) || line.match(/^[а-я]\)/) || line.trim().startsWith("-")) {
         return new Paragraph({
           children: [new TextRun({ text: line, ...commonProps })],
           indent: { left: 720 },
-          spacing: { after: 100 }
+          spacing: { after: 100 },
         });
       } else if (line.trim().startsWith("Бажарувчи:") || line.trim().startsWith("Буюртмачи:")) {
         const parts = line.split(/:\s*/);
@@ -406,12 +416,20 @@ _________________________                   _________________________
           spacing: { before: 300, after: 100 },
           tabStops: [{ type: docx.TabStopType.LEFT, position: 4320 }],
         });
-      } else if (line.includes(":") && (line.includes("СТИР:") || line.includes("Телефон:") || line.includes("Х/р:") || line.includes("МФО:") || line.includes("Манзил:") || line.includes("Кафил:"))) {
+      } else if (
+        line.includes(":") &&
+        (line.includes("СТИР:") ||
+          line.includes("Телефон:") ||
+          line.includes("Х/р:") ||
+          line.includes("МФО:") ||
+          line.includes("Манзил:") ||
+          line.includes("Кафил:"))
+      ) {
         const [key, value] = line.split(/:(.+)/);
         return new Paragraph({
           children: [
             new TextRun({ text: `${key?.trim()}:`, ...commonProps }),
-            new TextRun({ text: `\t${value?.trim() || ''}`, ...commonProps }),
+            new TextRun({ text: `\t${value?.trim() || ""}`, ...commonProps }),
           ],
           indent: { left: line.trim().startsWith("Кафил") ? 720 : 0 },
           spacing: { after: 50 },
@@ -423,29 +441,53 @@ _________________________                   _________________________
         return new Paragraph({
           children: [new TextRun({ text: line, ...commonProps })],
           alignment: AlignmentType.JUSTIFIED,
-          spacing: { after: 100 }
+          spacing: { after: 100 },
         });
       }
     };
-    
+
     const doc = new Document({
       creator: "Ahlan House System",
       title: `Shartnoma №${paymentId}`,
       description: `Xonadon band qilish shartnomasi ${client.fio} uchun`,
-      sections: [{
-        properties: {
-          page: { margin: { top: 1440, right: 1080, bottom: 1440, left: 1080 } },
+      sections: [
+        {
+          properties: {
+            page: { margin: { top: 1440, right: 1080, bottom: 1440, left: 1080 } },
+          },
+          children: lines.map(formatParagraph),
         },
-        children: lines.map(formatParagraph),
-      }],
+      ],
       styles: {
         paragraphStyles: [
-          { id: "Normal", name: "Normal", run: { font: "Times New Roman", size: 24 }, paragraph: { spacing: { after: 120 }, alignment: AlignmentType.JUSTIFIED } },
-          { id: "CenteredTitle", name: "Centered Title", basedOn: "Normal", run: { bold: true, size: 28 }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 240 } } },
-          { id: "Heading1", name: "Heading 1", basedOn: "Normal", run: { bold: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { before: 360, after: 180 } } },
-          { id: "ListItem", name: "List Item", basedOn: "Normal", paragraph: { alignment: AlignmentType.LEFT, indent: { left: 720 }, spacing: { after: 100 } } }
+          {
+            id: "Normal",
+            name: "Normal",
+            run: { font: "Times New Roman", size: 24 },
+            paragraph: { spacing: { after: 120 }, alignment: AlignmentType.JUSTIFIED },
+          },
+          {
+            id: "CenteredTitle",
+            name: "Centered Title",
+            basedOn: "Normal",
+            run: { bold: true, size: 28 },
+            paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 240 } },
+          },
+          {
+            id: "Heading1",
+            name: "Heading 1",
+            basedOn: "Normal",
+            run: { bold: true },
+            paragraph: { alignment: AlignmentType.LEFT, spacing: { before: 360, after: 180 } },
+          },
+          {
+            id: "ListItem",
+            name: "List Item",
+            basedOn: "Normal",
+            paragraph: { alignment: AlignmentType.LEFT, indent: { left: 720 }, spacing: { after: 100 } },
+          },
         ],
-      }
+      },
     });
     return await Packer.toBlob(doc);
   };
@@ -453,11 +495,15 @@ _________________________                   _________________________
   const handleDownloadContractWord = async (paymentId: number, client: any) => {
     try {
       const blob = await generateContractWordBlob(paymentId, client);
-      saveAs(blob, `Shartnoma_${paymentId}_${client.fio.replace(/\s+/g, '_')}.docx`);
+      saveAs(blob, `Shartnoma_${paymentId}_${client.fio.replace(/\s+/g, "_")}.docx`);
       toast({ title: "Muvaffaqiyat", description: "Shartnoma fayli yuklab olindi." });
     } catch (error) {
       console.error("Error generating or downloading Word contract:", error);
-      toast({ title: "Xatolik", description: "Shartnoma faylini yaratishda yoki yuklashda xatolik.", variant: "destructive" });
+      toast({
+        title: "Xatolik",
+        description: "Shartnoma faylini yaratishda yoki yuklashda xatolik.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -488,7 +534,11 @@ _________________________                   _________________________
         printWindow.print();
       }, 250);
     } else {
-      toast({ title: "Xatolik", description: "Chop etish oynasini ochib bo‘lmadi. Brauzeringizda popup blokerni tekshiring.", variant: "destructive" });
+      toast({
+        title: "Xatolik",
+        description: "Chop etish oynasini ochib bo‘lmadi. Brauzeringizda popup blokerni tekshiring.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -508,12 +558,28 @@ _________________________                   _________________________
       toast({ title: "Xatolik", description: "Kerakli ma'lumotlar topilmadi.", variant: "destructive" });
       return;
     }
-    if (apartment.status !== 'sotuvda' && apartment.status !== 'bosh') {
-      toast({ title: "Mumkin emas", description: "Bu xonadon allaqachon band qilingan yoki sotilgan.", variant: "destructive" });
+    if (apartment.status !== "sotuvda" && apartment.status !== "bosh") {
+      toast({
+        title: "Mumkin emas",
+        description: "Bu xonadon allaqachon band qilingan yoki sotilgan.",
+        variant: "destructive",
+      });
       return;
     }
-    if (paymentType === 'naqd' && (!formData.initialPayment || Number(formData.initialPayment) <= 0)) {
-      toast({ title: "Xatolik", description: "Naqd to'lov uchun to'lanayotgan summani kiriting.", variant: "destructive" });
+    if (paymentType === "naqd" && (!formData.initialPayment || Number(formData.initialPayment) <= 0)) {
+      toast({
+        title: "Xatolik",
+        description: "Naqd to'lov uchun to'lanayotgan summani kiriting.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (paymentType === "muddatli" && Number(formData.initialPayment) < apartment.price * 0.3) {
+      toast({
+        title: "Xatolik",
+        description: `Boshlang'ich to'lov kamida 30% bo'lishi kerak (${Math.round(apartment.price * 0.3).toLocaleString("us-US")} so'm).`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -538,20 +604,19 @@ _________________________                   _________________________
         return;
       }
 
-      const finalPrice = paymentType === 'naqd' ? apartment.price * 1.1 : apartment.price;
-      
+      const finalPrice = paymentType === "naqd" ? apartment.price : apartment.price;
+
       const paymentPayload = {
         user: Number(formData.clientId),
         apartment: Number(params.id),
         payment_type: paymentType,
         total_amount: finalPrice.toString(),
         initial_payment: formData.initialPayment || "0",
-        interest_rate: Number(formData.interestRate).toString(),
         duration_months: paymentType === "naqd" ? 0 : Number(formData.totalMonths),
         monthly_payment: paymentType === "naqd" ? "0" : calculatedMonthlyPayment.toFixed(2),
         due_date: formData.due_date || 15,
-        paid_amount: paymentType === 'naqd' ? formData.initialPayment || "0" : "0",
-        status: paymentType === 'naqd' ? "paid" : "pending",
+        paid_amount: paymentType === "naqd" ? formData.initialPayment || "0" : "0",
+        status: paymentType === "naqd" ? "paid" : "pending",
         additional_info: formData.comments || "",
       };
 
@@ -565,14 +630,14 @@ _________________________                   _________________________
         const errorData = await paymentResponse.json().catch(() => ({}));
         console.error("Payment creation error:", errorData);
         let errorMessage = `To'lov yozuvini yaratishda xatolik (${paymentResponse.status})`;
-        if (errorData && typeof errorData === 'object') {
+        if (errorData && typeof errorData === "object") {
           const firstErrorKey = Object.keys(errorData)[0];
           const errorValue = errorData[firstErrorKey];
           if (firstErrorKey && Array.isArray(errorValue) && errorValue.length > 0) {
             errorMessage = errorValue[0];
           } else if (errorData.detail) {
             errorMessage = errorData.detail;
-          } else if (typeof errorValue === 'string') {
+          } else if (typeof errorValue === "string") {
             errorMessage = `${firstErrorKey}: ${errorValue}`;
           }
         }
@@ -591,15 +656,18 @@ _________________________                   _________________________
 
       try {
         await fetch(`${API_BASE_URL}/apartments/${params.id}/`, {
-          method: 'PATCH',
+          method: "PATCH",
           headers: getAuthHeaders(),
-          body: JSON.stringify({ status: paymentPayload.status === 'paid' ? 'sotilgan' : 'band' })
+          body: JSON.stringify({ status: paymentPayload.status === "paid" ? "sotilgan" : "band" }),
         });
       } catch (patchError) {
         console.error("Failed to update apartment status:", patchError);
-        toast({ title: "Ogohlantirish", description: "Xonadon statusini avtomatik yangilab bo'lmadi.", variant: "default" });
+        toast({
+          title: "Ogohlantirish",
+          description: "Xonadon statusini avtomatik yangilab bo'lmadi.",
+          variant: "default",
+        });
       }
-
     } catch (error) {
       console.error("Band qilish jarayonida xatolik:", error);
       toast({ title: "Xatolik yuz berdi", description: (error as Error).message, variant: "destructive" });
@@ -675,14 +743,14 @@ _________________________                   _________________________
                           value={formData.clientId}
                           onValueChange={(value) => {
                             handleSelectChange("clientId", value);
-                            setFormData(prev => ({
+                            setFormData((prev) => ({
                               ...prev,
                               name: "",
                               phone: "",
                               address: "",
                               kafilFio: "",
                               kafilPhone: "",
-                              kafilAddress: ""
+                              kafilAddress: "",
                             }));
                             setShowKafil(false);
                           }}
@@ -698,7 +766,9 @@ _________________________                   _________________________
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="no-clients" disabled>Mijozlar topilmadi</SelectItem>
+                              <SelectItem value="no-clients" disabled>
+                                Mijozlar topilmadi
+                              </SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -711,7 +781,9 @@ _________________________                   _________________________
                       <div className="space-y-4 pt-2">
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
-                            <Label htmlFor="name">F.I.O. <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="name">
+                              F.I.O. <span className="text-red-500">*</span>
+                            </Label>
                             <Input
                               id="name"
                               name="name"
@@ -725,7 +797,9 @@ _________________________                   _________________________
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="phone">Telefon raqami <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="phone">
+                              Telefon raqami <span className="text-red-500">*</span>
+                            </Label>
                             <Input
                               id="phone"
                               name="phone"
@@ -777,11 +851,11 @@ _________________________                   _________________________
                                   type="button"
                                   onClick={() => {
                                     setShowKafil(false);
-                                    setFormData(prev => ({
+                                    setFormData((prev) => ({
                                       ...prev,
                                       kafilFio: "",
                                       kafilPhone: "",
-                                      kafilAddress: ""
+                                      kafilAddress: "",
                                     }));
                                   }}
                                   className="text-xs text-red-600 hover:bg-red-50"
@@ -828,17 +902,8 @@ _________________________                   _________________________
                             </div>
                           )}
                         </div>
-                        <Button
-                          type="button"
-                          onClick={handleAddClient}
-                          disabled={isAddingClient}
-                          className="w-full mt-4"
-                        >
-                          {isAddingClient ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <UserPlus className="mr-2 h-4 w-4" />
-                          )}
+                        <Button type="button" onClick={handleAddClient} disabled={isAddingClient} className="w-full mt-4">
+                          {isAddingClient ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
                           Mijozni qo'shish
                         </Button>
                       </div>
@@ -854,17 +919,15 @@ _________________________                   _________________________
                           value={paymentType}
                           onValueChange={(value) => {
                             setPaymentType(value);
-                            const isNaqd = value === 'naqd';
-                            const isIpoteka = value === 'ipoteka';
-                            setFormData(prev => ({
+                            const isNaqd = value === "naqd";
+                            setFormData((prev) => ({
                               ...prev,
-                              interestRate: isIpoteka ? '10' : '0',
-                              totalMonths: isNaqd ? '0' : (prev.totalMonths === '0' ? '12' : prev.totalMonths),
-                              initialPayment: isNaqd && apartment?.price 
-                                ? (apartment.price * 1.1).toString() 
-                                : apartment?.price && !isNaqd 
-                                  ? Math.round(apartment.price * 0.3).toString() 
-                                  : prev.initialPayment
+                              totalMonths: isNaqd ? "0" : prev.totalMonths === "0" ? "12" : prev.totalMonths,
+                              initialPayment: isNaqd && apartment?.price
+                                ? apartment.price.toString()
+                                : apartment?.price && !isNaqd
+                                ? Math.round(apartment.price * 0.3).toString()
+                                : prev.initialPayment,
                             }));
                           }}
                         >
@@ -873,16 +936,17 @@ _________________________                   _________________________
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="naqd">Naqd</SelectItem>
-                            <SelectItem value="muddatli">Muddatli to'lov (0%)</SelectItem>
-                            <SelectItem value="ipoteka">Ipoteka (10%)</SelectItem>
+                            <SelectItem value="muddatli">Muddatli to'lov</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
-                    {(paymentType === "muddatli" || paymentType === "ipoteka") && (
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {paymentType === "muddatli" && (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
-                          <Label htmlFor="initialPayment">Boshlang'ich to'lov (so‘m) <span className="text-red-500">*</span></Label>
+                          <Label htmlFor="initialPayment">
+                            Boshlang'ich to'lov<span className="text-red-500">*</span>
+                          </Label>
                           <Input
                             id="initialPayment"
                             name="initialPayment"
@@ -893,14 +957,12 @@ _________________________                   _________________________
                             onChange={handleChange}
                             required
                           />
-                          {apartment && (
-                            <p className="text-xs text-muted-foreground">
-                              Min. 30%: {Math.round(apartment.price * 0.3).toLocaleString('uz-UZ')} so'm
-                            </p>
-                          )}
+                          
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="totalMonths">To'lov muddati (oy) <span className="text-red-500">*</span></Label>
+                          <Label htmlFor="totalMonths">
+                            To'lov muddati (oy) <span className="text-red-500">*</span>
+                          </Label>
                           <Select
                             value={formData.totalMonths}
                             onValueChange={(value) => handleSelectChange("totalMonths", value)}
@@ -910,6 +972,7 @@ _________________________                   _________________________
                               <SelectValue placeholder="Muddat" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="3">3 oy</SelectItem>
                               <SelectItem value="6">6 oy</SelectItem>
                               <SelectItem value="12">12 oy</SelectItem>
                               <SelectItem value="18">18 oy</SelectItem>
@@ -918,40 +981,21 @@ _________________________                   _________________________
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="interestRate">Foiz stavkasi (%)</Label>
-                          <Input
-                            id="interestRate"
-                            name="interestRate"
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            value={formData.interestRate}
-                            onChange={handleChange}
-                            required
-                            readOnly={paymentType === 'muddatli'}
-                          />
-                          {paymentType === 'muddatli' && (
-                            <p className="text-xs text-muted-foreground">Foiz stavkasi 0%</p>
-                          )}
-                          {paymentType === 'ipoteka' && (
-                            <p className="text-xs text-muted-foreground">Foiz stavkasi 10%</p>
-                          )}
-                        </div>
                       </div>
                     )}
                     {paymentType === "naqd" && (
                       <div className="space-y-2">
-                        <Label htmlFor="initialPayment">To'lanayotgan summa (Naqd) <span className="text-red-500">*</span></Label>
+                        <Label htmlFor="initialPayment">
+                          To'lanayotgan summa (Naqd) <span className="text-red-500">*</span>
+                        </Label>
                         <Input
                           id="initialPayment"
                           name="initialPayment"
                           type="number"
                           value={formData.initialPayment}
-                          readOnly
+                          onChange={handleChange}
                           required
                         />
-                        
                       </div>
                     )}
                     <div className="space-y-2">
@@ -968,17 +1012,19 @@ _________________________                   _________________________
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-end space-x-3 border-t px-6 py-4">
-                  <Button
-                    variant="outline"
-                    type="button"
-                    onClick={() => router.back()}
-                    disabled={submitting || isAddingClient}
-                  >
+                  <Button variant="outline" type="button" onClick={() => router.back()} disabled={submitting || isAddingClient}>
                     Bekor qilish
                   </Button>
                   <Button
                     type="submit"
-                    disabled={submitting || isAddingClient || loading || !apartment || !formData.clientId || (apartment.status !== 'sotuvda' && apartment.status !== 'bosh')}
+                    disabled={
+                      submitting ||
+                      isAddingClient ||
+                      loading ||
+                      !apartment ||
+                      !formData.clientId ||
+                      (apartment.status !== "sotuvda" && apartment.status !== "bosh")
+                    }
                   >
                     {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {submitting ? "Band qilinmoqda..." : "Band qilish va Shartnoma"}
@@ -997,40 +1043,52 @@ _________________________                   _________________________
                 <CardContent className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span>Obyekt:</span>
-                    <span className="font-medium text-right">{apartment.object_name || '-'}</span>
+                    <span className="font-medium text-right">{apartment.object_name || "-"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Xonadon №:</span>
-                    <span className="font-medium">{apartment.room_number || '-'}</span>
+                    <span className="font-medium">{apartment.room_number || "-"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Qavat:</span>
-                    <span className="font-medium">{apartment.floor || '-'}</span>
+                    <span className="font-medium">{apartment.floor || "-"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Xonalar:</span>
-                    <span className="font-medium">{apartment.rooms || '-'}</span>
+                    <span className="font-medium">{apartment.rooms || "-"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Maydon:</span>
-                    <span className="font-medium">{apartment.area || '-'} m²</span>
+                    <span className="font-medium">{apartment.area || "-"} m²</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t">
                     <span className="font-semibold">Narx:</span>
                     <span className="font-bold text-lg text-primary">
-                      {Number(paymentType === 'naqd' ? apartment.price * 1.1 : apartment.price).toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}
+                      {Number(apartment.price).toLocaleString("us-US", { style: "currency", currency: "USD" })}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span>Holati:</span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${apartment.status === 'sotuvda' || apartment.status === 'bosh' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {apartment.status === 'sotuvda' || apartment.status === 'bosh' ? 'Sotuvda' : apartment.status === 'band' ? 'Band' : apartment.status === 'sotilgan' ? 'Sotilgan' : 'Noma\'lum'}
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        apartment.status === "sotuvda" || apartment.status === "bosh"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {apartment.status === "sotuvda" || apartment.status === "bosh"
+                        ? "Sotuvda"
+                        : apartment.status === "band"
+                        ? "Band"
+                        : apartment.status === "sotilgan"
+                        ? "Sotilgan"
+                        : "Noma'lum"}
                     </span>
                   </div>
                 </CardContent>
               </Card>
             )}
-            {apartment && (paymentType === "muddatli" || paymentType === "ipoteka") && (
+            {apartment && paymentType === "muddatli" && (
               <Card>
                 <CardHeader>
                   <CardTitle>Taxminiy to'lov jadvali</CardTitle>
@@ -1038,22 +1096,23 @@ _________________________                   _________________________
                 <CardContent className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span>Umumiy narx:</span>
-                    <span>{Number(apartment.price).toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</span>
+                    <span>{Number(apartment.price).toLocaleString("us-US", { style: "currency", currency: "USD" })}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Boshlang'ich to'lov:</span>
                     <span>
-                      {Number(formData.initialPayment || "0").toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}
+                      {Number(formData.initialPayment || "0").toLocaleString("us-US", { style: "currency", currency: "USD" })}
                       ({apartment.price > 0 ? ((Number(formData.initialPayment || "0") / apartment.price) * 100).toFixed(1) : 0}%)
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Qolgan summa:</span>
-                    <span>{(apartment.price - Number(formData.initialPayment || "0")).toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Foiz stavkasi:</span>
-                    <span>{formData.interestRate}%</span>
+                    <span>
+                      {(apartment.price - Number(formData.initialPayment || "0")).toLocaleString("us-US", {
+                        style: "currency",
+                        currency: "USD",
+                      })}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Muddat:</span>
@@ -1066,7 +1125,11 @@ _________________________                   _________________________
                         try {
                           const monthly = calculateMonthlyPayment();
                           if (monthly > 0 || Number(formData.initialPayment) < apartment.price) {
-                            return monthly.toLocaleString("uz-UZ", { style: "currency", currency: "UZS", minimumFractionDigits: 2 });
+                            return monthly.toLocaleString("us-US", {
+                              style: "currency",
+                              currency: "USD",
+                              minimumFractionDigits: 2,
+                            });
                           } else {
                             return "-";
                           }
@@ -1093,25 +1156,41 @@ _________________________                   _________________________
               </Button>
             </CardHeader>
             <CardContent className="p-4 md:p-6 flex-grow overflow-y-auto">
-              <p className="mb-4 text-sm text-muted-foreground">Xonadon muvaffaqiyatli band qilindi. Quyida dastlabki shartnoma bilan tanishing.</p>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Xonadon muvaffaqiyatli band qilindi. Quyida dastlabki shartnoma bilan tanishing.
+              </p>
               <div ref={receiptRef} className="p-4 bg-gray-50 rounded border border-gray-200">
-                <pre className="whitespace-pre-wrap text-xs sm:text-sm font-serif leading-relaxed">{requestReceipt.contractText}</pre>
+                <pre className="whitespace-pre-wrap text-xs sm:text-sm font-serif leading-relaxed">
+                  {requestReceipt.contractText}
+                </pre>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end border-t px-4 py-3">
-              <Button onClick={() => handleDownloadContractWord(requestReceipt.id, requestReceipt.client)} variant="default" size="sm">
+              <Button
+                onClick={() => handleDownloadContractWord(requestReceipt.id, requestReceipt.client)}
+                variant="default"
+                size="sm"
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 Word (.docx)
               </Button>
               <Button onClick={handlePrintContract} variant="secondary" size="sm">
                 <Printer className="h-4 w-4 mr-2" /> Chop etish
               </Button>
-              <Button onClick={() => {
-                setIsReceiptModalOpen(false);
-                router.push(`/apartments/${apartment.id}`);
-              }} variant="outline" size="sm">
+              <Button
+                onClick={() => {
+                  setIsReceiptModalOpen(false);
+                  router.push(`/apartments/${apartment.id}`);
+                }}
+                variant="outline"
+                size="sm"
+              >
                 Yopish
               </Button>
             </CardFooter>

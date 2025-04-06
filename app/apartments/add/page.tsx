@@ -188,7 +188,7 @@ export default function AddApartmentPage() {
                   <Input
                     id="room_number"
                     name="room_number"
-                    type="number"
+                    type="text"
                     placeholder="Masalan: 1001"
                     value={formData.room_number}
                     onChange={handleChange}
@@ -233,7 +233,7 @@ export default function AddApartmentPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="price">Narx (so‘m)</Label>
+                  <Label htmlFor="price">Narx ($)</Label>
                   <Input
                     id="price"
                     name="price"

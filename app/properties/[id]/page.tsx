@@ -277,7 +277,7 @@ export default function PropertyDetailPage() {
                   <CardContent>
                     <p>Qavat: {apt.floor}</p>
                     <p>Maydon: {apt.area} m²</p>
-                    <p>Narx: {apt.price} so‘m</p>
+                    <p>Narx: {apt.price} $</p>
                     <p>Holati: {apt.status}</p>
                   </CardContent>
                 </Card>
@@ -302,7 +302,7 @@ export default function PropertyDetailPage() {
                     <CardDescription>{exp.expense_type_name}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p>Miqdor: {exp.amount} so‘m</p>
+                    <p>Miqdor: {exp.amount} $</p>
                     <p>Sana: {new Date(exp.date).toLocaleDateString()}</p>
                     <p>Holati: {exp.status}</p>
                     <p>Izoh: {exp.comment}</p>
@@ -353,18 +353,18 @@ export default function PropertyDetailPage() {
                 {analytics ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p>Jami sotuvlar: {analytics.total_sales} so‘m</p>
+                      <p>Jami sotuvlar: {analytics.total_sales} $</p>
                       <p>Sotilgan xonadonlar: {analytics.sold_apartments}</p>
                       <p>Bo‘sh xonadonlar: {analytics.free_apartments}</p>
                       <p>Band qilingan xonadonlar: {analytics.reserved_apartments}</p>
-                      <p>O‘rtacha narx: {analytics.average_price} so‘m</p>
+                      <p>O‘rtacha narx: {analytics.average_price} $</p>
                     </div>
                     <div>
-                      <p>Jami to‘lovlar: {analytics.total_payments} so‘m</p>
-                      <p>To‘langan to‘lovlar: {analytics.paid_payments} so‘m</p>
-                      <p>Kutilayotgan to‘lovlar: {analytics.pending_payments} so‘m</p>
-                      <p>Muddati o‘tgan to‘lovlar: {analytics.overdue_payments} so‘m</p>
-                      <p>Bugun to‘lovlar: {analytics.payments_due_today} so‘m</p>
+                      <p>Jami to‘lovlar: {analytics.total_payments} $</p>
+                      <p>To‘langan to‘lovlar: {analytics.paid_payments} $</p>
+                      <p>Kutilayotgan to‘lovlar: {analytics.pending_payments} $</p>
+                      <p>Muddati o‘tgan to‘lovlar: {analytics.overdue_payments} $</p>
+                      <p>Bugun to‘lovlar: {analytics.payments_due_today} $</p>
                     </div>
                   </div>
                 ) : (

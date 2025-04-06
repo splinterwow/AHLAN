@@ -21,7 +21,7 @@ const Overview = ({ data }) => {
       <CartesianGrid strokeDasharray="3 3" />
       <XAxis dataKey="name" />
       <YAxis />
-      <Tooltip formatter={(value) => value.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })} />
+      <Tooltip formatter={(value) => value.toLocaleString("us-US", { style: "currency", currency: "USD" })} />
       <Legend />
       <Line type="monotone" dataKey="total" stroke="#8884d8" activeDot={{ r: 8 }} />
     </LineChart>
@@ -314,10 +314,10 @@ export default function DashboardPage() {
           <h2 className="text-3xl font-bold tracking-tight">Boshqaruv paneli</h2>
           <div className="flex items-center space-x-2">
             <CalendarDateRangePicker onChange={handleDateRangeChange} />
-            <Button>
+            {/* <Button>
               <BarChart className="mr-2 h-4 w-4" />
               Hisobotlar
-            </Button>
+            </Button> */}
           </div>
         </div>
 
@@ -337,7 +337,7 @@ export default function DashboardPage() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalSales.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold">{stats.totalSales.toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                   <p className="text-xs text-muted-foreground">+20.1% o'tgan oyga nisbatan</p>
                 </CardContent>
               </Card>
@@ -369,7 +369,7 @@ export default function DashboardPage() {
                   <CreditCard className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-600">{stats.overduePayments.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold text-red-600">{stats.overduePayments.toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                   <p className="text-xs text-muted-foreground">
                     {stats.totalSales ? Math.round((stats.overduePayments / stats.totalSales) * 100) : 0}% jami sotuvlardan
                   </p>
@@ -404,7 +404,7 @@ export default function DashboardPage() {
                             <p className="text-sm text-muted-foreground">{payment.apartment_info}</p>
                           </div>
                           <div className="ml-auto font-medium">
-                            {parseFloat(payment.total_amount).toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}
+                            {parseFloat(payment.total_amount).toLocaleString("us-US", { style: "currency", currency: "USD" })}
                           </div>
                         </div>
                       ))
@@ -493,7 +493,7 @@ export default function DashboardPage() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalSales.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold">{stats.totalSales.toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                 </CardContent>
               </Card>
               <Card>
@@ -520,7 +520,7 @@ export default function DashboardPage() {
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{Math.round(stats.averagePrice).toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold">{Math.round(stats.averagePrice).toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                 </CardContent>
               </Card>
             </div>
@@ -534,7 +534,7 @@ export default function DashboardPage() {
                   <CreditCard className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalPayments.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold">{stats.totalPayments.toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                   <p className="text-xs text-muted-foreground">
                     {stats.totalSales ? Math.round((stats.totalPayments / stats.totalSales) * 100) : 0}% jami sotuvlardan
                   </p>
@@ -546,7 +546,7 @@ export default function DashboardPage() {
                   <CreditCard className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-yellow-600">{stats.pendingPayments.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold text-yellow-600">{stats.pendingPayments.toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                   <p className="text-xs text-muted-foreground">
                     {stats.totalSales ? Math.round((stats.pendingPayments / stats.totalSales) * 100) : 0}% jami sotuvlardan
                   </p>
@@ -558,7 +558,7 @@ export default function DashboardPage() {
                   <CreditCard className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-600">{stats.overduePayments.toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}</div>
+                  <div className="text-2xl font-bold text-red-600">{stats.overduePayments.toLocaleString("us-US", { style: "currency", currency: "USD" })}</div>
                   <p className="text-xs text-muted-foreground">
                     {stats.totalSales ? Math.round((stats.overduePayments / stats.totalSales) * 100) : 0}% jami sotuvlardan
                   </p>
@@ -571,7 +571,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-red-600">
-                    {(stats.totalSales - stats.totalPayments).toLocaleString("uz-UZ", { style: "currency", currency: "UZS" })}
+                    {(stats.totalSales - stats.totalPayments).toLocaleString("us-US", { style: "currency", currency: "USD" })}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {stats.totalSales ? Math.round(((stats.totalSales - stats.totalPayments) / stats.totalSales) * 100) : 0}% jami sotuvlardan
